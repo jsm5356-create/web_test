@@ -13,11 +13,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# 로컬 테스트 모드 확인
-use_local = st.secrets.get("USE_LOCAL_STORAGE", "false").lower() == "true"
+# 로컬 테스트 모드 확인 (Streamlit Cloud에서는 항상 false)
+use_local = False
+try:
+    use_local_str = st.secrets.get("USE_LOCAL_STORAGE", "false")
+    if isinstance(use_local_str, str):
+        use_local = use_local_str.lower() == "true"
+except:
+    use_local = False
 
 if use_local:
-    # 로컬 모드: 로컬 파일 시스템 사용
+    # 로컬 모드: 로컬 파일 시스템 사용 (로컬 개발용)
     try:
         gemini_api_key = st.secrets["GEMINI_API_KEY"]
     except KeyError:
@@ -29,25 +35,30 @@ if use_local:
         st.session_state["gemini_api_key"] = gemini_api_key
         st.info("📁 로컬 파일 시스템 모드로 실행 중입니다. (data/ 폴더 사용)")
 else:
-    # GitHub 모드
+    # GitHub 모드 (Streamlit Cloud에서는 항상 이 모드)
     try:
-        github_token = st.secrets["GITHUB_TOKEN"]
-        repo_name = st.secrets["REPO_NAME"]
-        gemini_api_key = st.secrets["GEMINI_API_KEY"]
+        github_token = st.secrets.get("GITHUB_TOKEN")
+        repo_name = st.secrets.get("REPO_NAME")
+        gemini_api_key = st.secrets.get("GEMINI_API_KEY")
+        
+        # 필수 값 확인
+        if not github_token:
+            raise KeyError("GITHUB_TOKEN")
+        if not repo_name:
+            raise KeyError("REPO_NAME")
+        if not gemini_api_key:
+            raise KeyError("GEMINI_API_KEY")
+            
     except KeyError as e:
-        st.error(f"⚠️ secrets.toml 파일에 필요한 설정이 없습니다: {e}")
-        st.info("`.streamlit/secrets.toml` 파일을 생성하고 다음 내용을 추가해주세요:")
+        st.error(f"⚠️ Streamlit Cloud Secrets에 필요한 설정이 없습니다: {e}")
+        st.info("**Streamlit Cloud 대시보드에서 다음 Secrets를 추가해주세요:**")
         st.code("""
-# 로컬 테스트 모드 (true로 설정하면 로컬 파일 시스템 사용)
-USE_LOCAL_STORAGE = "false"
-
-# GitHub 모드일 때 필요
 GITHUB_TOKEN = "ghp_xxxxxxxxxxxx"
 REPO_NAME = "username/repo-name"
-
-# Gemini API Key (항상 필요)
 GEMINI_API_KEY = "xxxxxxxxxxxx"
+ADMIN_PASSWORD = "your_password"
         """)
+        st.info("💡 **설정 방법:** Streamlit Cloud 앱 페이지 → Settings → Secrets → 위 내용을 추가하세요.")
         st.stop()
     
     # GithubManager 초기화
@@ -57,6 +68,7 @@ GEMINI_API_KEY = "xxxxxxxxxxxx"
             st.session_state["gemini_api_key"] = gemini_api_key
         except Exception as e:
             st.error(f"GitHub 인증 실패: {e}")
+            st.info("💡 GitHub Token과 Repository 이름을 확인해주세요.")
             st.stop()
 
 github_manager = st.session_state["github_manager"]
